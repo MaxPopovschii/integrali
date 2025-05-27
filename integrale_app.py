@@ -16,10 +16,44 @@ Questa app ti permette di:
 - Esplorare il principio di **Cavalieri** con sezioni di solidi di rivoluzione
 """)
 
-# Input
-expr_input = st.text_input("✏️ Inserisci la funzione f(x):", value="sin(x)")
-a = st.number_input("📉 Limite inferiore (a):", value=0.0)
-b = st.number_input("📈 Limite superiore (b):", value=float(np.pi))
+# Funzioni predefinite e intervalli consigliati
+funzioni_predefinite = {
+    "sin(x)": (0, np.pi),
+    "cos(x)": (0, np.pi),
+    "x**2": (0, 1),
+    "sqrt(x)": (0, 1),
+    "exp(-x**2)": (-2, 2),
+    "1/(1+x**2)": (-5, 5),
+    "log(x+1)": (0, 2),
+    "abs(x)": (-1, 1),
+    "x**3": (-1, 1),
+    "exp(x)": (0, 1),
+    "tan(x)": (0, np.pi/4),
+    "1/x": (1, 2),
+    "cos(x)**2": (0, np.pi),
+    "sin(x)**2": (0, np.pi),
+    "1/(x+1)": (0, 2),
+    "x*exp(-x)": (0, 5),
+    "1/sqrt(x)": (0.01, 1),
+    "arctan(x)": (-2, 2),
+    "sinh(x)": (-1, 1),
+    "cosh(x)": (-1, 1)
+}
+
+scelta = st.selectbox(
+    "Scegli una funzione predefinita oppure scrivi la tua:",
+    list(funzioni_predefinite.keys()) + ["Personalizzata"]
+)
+
+if scelta != "Personalizzata":
+    expr_input = scelta
+    a_default, b_default = funzioni_predefinite[scelta]
+else:
+    expr_input = st.text_input("✏️ Inserisci la funzione f(x):", value="sin(x)")
+    a_default, b_default = 0.0, float(np.pi)
+
+a = st.number_input("📉 Limite inferiore (a):", value=float(a_default))
+b = st.number_input("📈 Limite superiore (b):", value=float(b_default))
 
 x = sp.Symbol('x')
 
@@ -28,6 +62,17 @@ try:
     f_expr = sp.sympify(expr_input)
     f_lambdified = sp.lambdify(x, f_expr, 'numpy')
     integral = sp.integrate(f_expr, (x, a, b)).evalf()
+
+    # Mostra i passaggi simbolici del calcolo integrale
+    st.subheader("📝 Passaggi simbolici del calcolo integrale")
+    try:
+        integral_indef = sp.integrate(f_expr, x)
+        st.latex(r"\int " + sp.latex(f_expr) + r"\,dx = " + sp.latex(integral_indef) + " + C")
+        st.latex(r"\int_{" + str(a) + "}^{" + str(b) + "} " + sp.latex(f_expr) + r"\,dx = " +
+                 sp.latex(integral_indef.subs(x, b)) + " - " + sp.latex(integral_indef.subs(x, a)) +
+                 " = " + str(integral))
+    except Exception as e:
+        st.info("Passaggi simbolici non disponibili per questa funzione.")
 
     # === GRAFICO 2D ===
     X_vals = np.linspace(a, b, 1000)
@@ -67,14 +112,29 @@ try:
         # Slider per sezione (altezza z)
         z0 = st.slider("📏 Altezza della sezione (z)", float(np.min(Z)), float(np.max(Z)), step=0.1, value=float(np.median(Z)))
 
-        # Sezione con punti rossi
-        mask = np.abs(Z - z0) < 0.05  # tolleranza per altezza
+        # === Sezione circolare vera: tutti i cerchi a quota z0 ===
+        section_x = []
+        section_y = []
+        section_z = []
+
+        for xi in X:
+            ri = f_lambdified(xi)
+            if np.abs(z0) <= np.abs(ri) and ri != 0:
+                # Calcola il raggio del cerchio a quota z0
+                r_sez = np.sqrt(ri**2 - z0**2)
+                theta_sec = np.linspace(0, 2*np.pi, 100)
+                y_sec = r_sez * np.cos(theta_sec)
+                z_sec = np.full_like(theta_sec, z0)
+                section_x.extend([xi]*len(theta_sec))
+                section_y.extend(y_sec)
+                section_z.extend(z_sec)
+
         fig3d.add_trace(go.Scatter3d(
-            x=X_mesh[mask],
-            y=Y_rot[mask],
-            z=Z[mask],
+            x=section_x,
+            y=section_y,
+            z=section_z,
             mode='markers',
-            marker=dict(size=2, color='red'),
+            marker=dict(size=3, color='red'),
             name=f'Sezione z = {z0:.2f}'
         ))
 
